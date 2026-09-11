@@ -1,0 +1,992 @@
+(() => {
+    // ============================================================
+    // SUGA'S SPOOFER
+    // Client-side authorization testing / UI spoofing
+    // ============================================================
+
+    // ------------------------------------------------------------
+    // Kill previous instance
+    // ------------------------------------------------------------
+
+    if (window.__sugaAuth) {
+        try {
+            window.__sugaAuth.destroy();
+        } catch (e) {
+            console.warn(
+                "[SUGA//AUTH] Failed to destroy previous instance:",
+                e
+            );
+        }
+    }
+
+    // ------------------------------------------------------------
+    // State
+    // ------------------------------------------------------------
+
+    let enabled = false;
+    let lastUser = window.currentUser || null;
+    let timer = null;
+
+    let dragging = false;
+    let pointerId = null;
+
+    let offsetX = 0;
+    let offsetY = 0;
+
+    let raf = null;
+    let pendingX = 0;
+    let pendingY = 0;
+
+    // ============================================================
+    // UI
+    // ============================================================
+
+    const panel = document.createElement("div");
+    panel.id = "suga-auth-panel";
+
+    panel.innerHTML = `
+        <div id="suga-head">
+            <span>☠ SUGA'S SPOOFER</span>
+
+            <div id="suga-controls">
+                <span id="suga-indicator">● OFF</span>
+                <button
+                    id="suga-close"
+                    type="button"
+                    title="Close"
+                >×</button>
+            </div>
+        </div>
+
+        <div id="suga-content">
+
+            <div class="suga-row">
+                <span>SPOOF USER</span>
+
+                <input
+                    id="suga-spoof-user"
+                    type="text"
+                    placeholder="Username"
+                    autocomplete="off"
+                    spellcheck="false"
+                >
+            </div>
+
+            <div class="suga-row">
+                <span>WATCHER</span>
+                <button
+                    id="suga-toggle"
+                    type="button"
+                >OFF</button>
+            </div>
+
+            <div class="suga-row">
+                <span>USER</span>
+                <span id="suga-user">---</span>
+            </div>
+
+            <div class="suga-row">
+                <span>STATE</span>
+                <span id="suga-state">STANDBY</span>
+            </div>
+
+            <div id="suga-log">
+                <div>&gt; [SUGA'S SPOOFER] AUTH CONSOLE READY</div>
+                <div>&gt; [+] WATCHER DISABLED</div>
+            </div>
+
+        </div>
+    `;
+
+    // ============================================================
+    // CSS
+    // ============================================================
+
+    const style = document.createElement("style");
+
+    style.textContent = `
+        #suga-auth-panel {
+            position: fixed;
+
+            top: 20px;
+            right: 20px;
+
+            width: 285px;
+
+            z-index: 2147483647;
+
+            background: #050805;
+            color: #00ff66;
+
+            border: 1px solid #00ff66;
+
+            box-shadow:
+                0 0 10px rgba(0, 255, 100, .30);
+
+            font-family:
+                Consolas,
+                "Courier New",
+                monospace;
+
+            font-size: 12px;
+
+            user-select: none;
+
+            contain: layout paint;
+        }
+
+        #suga-head {
+            height: 32px;
+
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            padding: 0 8px 0 10px;
+
+            background: #081208;
+
+            border-bottom: 1px solid #00ff66;
+
+            cursor: grab;
+
+            font-weight: bold;
+            letter-spacing: 1px;
+
+            touch-action: none;
+        }
+
+        #suga-head:active {
+            cursor: grabbing;
+        }
+
+        #suga-controls {
+            display: flex;
+            align-items: center;
+
+            gap: 8px;
+        }
+
+        #suga-indicator {
+            font-size: 10px;
+        }
+
+        #suga-close {
+            width: 22px;
+            height: 22px;
+
+            padding: 0;
+
+            border: 1px solid #ff4444;
+
+            background: #120505;
+            color: #ff4444;
+
+            font-family: inherit;
+            font-size: 16px;
+            line-height: 18px;
+
+            cursor: pointer;
+        }
+
+        #suga-close:hover {
+            background: #ff2222;
+            color: #000;
+        }
+
+        #suga-content {
+            padding: 10px;
+        }
+
+        .suga-row {
+            display: flex;
+
+            justify-content: space-between;
+            align-items: center;
+
+            gap: 8px;
+
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+
+            border-bottom: 1px dashed #164d28;
+        }
+
+        /* --------------------------------------------------------
+           Spoof username textbox
+           -------------------------------------------------------- */
+
+        #suga-spoof-user {
+            width: 125px;
+
+            box-sizing: border-box;
+
+            padding: 4px 6px;
+
+            background: #020402;
+            color: #00ff66;
+
+            border: 1px solid #164d28;
+
+            outline: none;
+
+            font-family: inherit;
+            font-size: 11px;
+
+            user-select: text;
+            cursor: text;
+        }
+
+        #suga-spoof-user::placeholder {
+            color: #276b3e;
+        }
+
+        #suga-spoof-user:focus {
+            border-color: #00ff66;
+
+            box-shadow:
+                0 0 5px rgba(0, 255, 100, .25);
+        }
+
+        /* --------------------------------------------------------
+           Watcher button
+           -------------------------------------------------------- */
+
+        #suga-toggle {
+            min-width: 48px;
+
+            padding: 3px 7px;
+
+            background: #050805;
+
+            border: 1px solid #ff4444;
+            color: #ff4444;
+
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: bold;
+
+            cursor: pointer;
+        }
+
+        #suga-toggle:hover {
+            filter: brightness(1.3);
+        }
+
+        /* --------------------------------------------------------
+           Log
+           -------------------------------------------------------- */
+
+        #suga-log {
+            height: 70px;
+
+            overflow: hidden;
+
+            padding: 7px;
+
+            background: #020402;
+
+            border: 1px solid #12351e;
+
+            color: #00b84d;
+
+            font-size: 10px;
+            line-height: 14px;
+        }
+
+        .suga-online {
+            color: #00ff66 !important;
+            text-shadow:
+                0 0 5px #00ff66;
+        }
+
+        .suga-offline {
+            color: #ff4444 !important;
+        }
+    `;
+
+    document.head.appendChild(style);
+    document.body.appendChild(panel);
+
+    // ============================================================
+    // Element references
+    // ============================================================
+
+    const head =
+        panel.querySelector("#suga-head");
+
+    const toggle =
+        panel.querySelector("#suga-toggle");
+
+    const close =
+        panel.querySelector("#suga-close");
+
+    const indicator =
+        panel.querySelector("#suga-indicator");
+
+    const userLabel =
+        panel.querySelector("#suga-user");
+
+    const stateLabel =
+        panel.querySelector("#suga-state");
+
+    const logBox =
+        panel.querySelector("#suga-log");
+
+    const spoofUserInput =
+        panel.querySelector("#suga-spoof-user");
+
+    // ============================================================
+    // Logging
+    // ============================================================
+
+    function log(message) {
+        const line =
+            document.createElement("div");
+
+        line.textContent =
+            `> ${message}`;
+
+        logBox.prepend(line);
+
+        while (logBox.children.length > 5) {
+            logBox.lastElementChild.remove();
+        }
+    }
+
+    // ============================================================
+    // Update UI
+    // ============================================================
+
+    function updateUI() {
+        const current =
+            window.currentUser || null;
+
+        // Display current client-side identity
+        userLabel.textContent =
+            current || "---";
+
+        // IMPORTANT:
+        // The textbox is ALWAYS editable.
+        // You can configure the target username before logging in.
+        spoofUserInput.disabled = false;
+
+        if (enabled) {
+            indicator.textContent = "● ON";
+            indicator.className =
+                "suga-online";
+
+            toggle.textContent = "ON";
+            toggle.className =
+                "suga-online";
+
+            stateLabel.textContent =
+                "MONITORING";
+        } else {
+            indicator.textContent = "● OFF";
+            indicator.className =
+                "suga-offline";
+
+            toggle.textContent = "OFF";
+            toggle.className =
+                "suga-offline";
+
+            stateLabel.textContent =
+                "STANDBY";
+        }
+    }
+
+    // ============================================================
+    // Refresh navigation menus
+    // ============================================================
+
+    function refreshMenus() {
+        const menus = [
+            "home",
+            "presensi",
+            "laporan",
+            "catatan"
+        ];
+
+        // Hide all known menus first.
+        menus.forEach(menu => {
+            const element =
+                document.getElementById(
+                    "nav-" + menu
+                );
+
+            if (element) {
+                element.style.display = "none";
+            }
+        });
+
+        // Then show the configured allowed menus.
+        const allowed =
+            Array.isArray(window.allowedMenus)
+                ? window.allowedMenus
+                : [];
+
+        allowed.forEach(menu => {
+            const element =
+                document.getElementById(
+                    "nav-" + menu
+                );
+
+            if (element) {
+                element.style.display = "flex";
+            }
+        });
+    }
+
+    // ============================================================
+    // Refresh visible username text
+    // ============================================================
+
+    function refreshDisplayedUsername(
+        oldUsername,
+        newUsername
+    ) {
+        if (!oldUsername) {
+            return;
+        }
+
+        const oldValue =
+            String(oldUsername)
+                .trim()
+                .toLowerCase();
+
+        document.querySelectorAll("*").forEach(
+            element => {
+
+                // Never modify our own panel.
+                if (element === panel) {
+                    return;
+                }
+
+                if (panel.contains(element)) {
+                    return;
+                }
+
+                // Only modify leaf elements.
+                if (element.children.length !== 0) {
+                    return;
+                }
+
+                const text =
+                    element.textContent
+                        .trim()
+                        .toLowerCase();
+
+                if (text === oldValue) {
+                    element.textContent =
+                        newUsername;
+                }
+            }
+        );
+    }
+
+    // ============================================================
+    // Apply username spoof
+    // ============================================================
+
+    function applySpoof(targetUsername) {
+        // Must already have a client-side login.
+        if (!window.currentUser) {
+            log(
+                "[!] SPOOF BLOCKED: NOT LOGGED IN"
+            );
+
+            return false;
+        }
+
+        const target =
+            String(targetUsername || "").trim();
+
+        if (!target) {
+            log(
+                "[!] SPOOF BLOCKED: EMPTY USERNAME"
+            );
+
+            return false;
+        }
+
+        const original =
+            window.currentUser;
+
+        // --------------------------------------------------------
+        // Client-side identity replacement
+        // --------------------------------------------------------
+
+        window.currentUser =
+            target;
+
+        // --------------------------------------------------------
+        // Client-side menu replacement
+        // --------------------------------------------------------
+
+        window.allowedMenus = [
+            "home",
+            "presensi",
+            "laporan",
+            "catatan"
+        ];
+
+        // --------------------------------------------------------
+        // Refresh page UI
+        // --------------------------------------------------------
+
+        refreshMenus();
+
+        refreshDisplayedUsername(
+            original,
+            target
+        );
+
+        // --------------------------------------------------------
+        // Logging
+        // --------------------------------------------------------
+
+        console.log(
+            "[SUGA//AUTH] Original:",
+            original
+        );
+
+        console.log(
+            "[SUGA//AUTH] Spoofed:",
+            target
+        );
+
+        console.log(
+            "[SUGA//AUTH] Menus:",
+            window.allowedMenus
+        );
+
+        log(
+            `[+] SPOOFED! ${original} → ${target}`
+        );
+
+        updateUI();
+
+        return true;
+    }
+
+    // ============================================================
+    // Login handler
+    // ============================================================
+
+    function handleLogin(user) {
+        console.log(
+            "[*] Login detected:",
+            user
+        );
+
+        const loggedInAs =
+            String(user || "").trim();
+
+        log(
+            `[*] LOGIN: ${loggedInAs}`
+        );
+
+        // Read target username from textbox.
+        const target =
+            spoofUserInput.value.trim();
+
+        // Nothing configured.
+        if (!target) {
+            log(
+                "[!] No spoof username configured"
+            );
+
+            updateUI();
+
+            return;
+        }
+
+        // Apply configured spoof.
+        applySpoof(target);
+    }
+
+    // ============================================================
+    // Watcher check
+    // ============================================================
+
+    function check() {
+        if (!enabled) {
+            return;
+        }
+
+        const current =
+            window.currentUser || null;
+
+        // Nothing changed.
+        if (current === lastUser) {
+            return;
+        }
+
+        // --------------------------------------------------------
+        // Logout
+        // --------------------------------------------------------
+
+        if (lastUser && !current) {
+            log(
+                "[*] LOGOUT DETECTED"
+            );
+
+            stateLabel.textContent =
+                "WAITING";
+
+            lastUser = null;
+
+            updateUI();
+
+            return;
+        }
+
+        // --------------------------------------------------------
+        // Login
+        // --------------------------------------------------------
+
+        if (!lastUser && current) {
+            handleLogin(current);
+
+            // handleLogin() may have modified currentUser.
+            lastUser =
+                window.currentUser || null;
+
+            updateUI();
+
+            return;
+        }
+
+        // --------------------------------------------------------
+        // Any other identity change
+        // --------------------------------------------------------
+
+        lastUser =
+            window.currentUser || null;
+
+        updateUI();
+    }
+
+    // ============================================================
+    // Start watcher
+    // ============================================================
+
+    function startWatcher() {
+        if (enabled) {
+            return;
+        }
+
+        enabled = true;
+
+        log(
+            "[+] WATCHER ENABLED"
+        );
+
+        timer =
+            setInterval(check, 500);
+
+        // Immediately check current state.
+        check();
+
+        updateUI();
+    }
+
+    // ============================================================
+    // Stop watcher
+    // ============================================================
+
+    function stopWatcher() {
+        enabled = false;
+
+        if (timer !== null) {
+            clearInterval(timer);
+            timer = null;
+        }
+
+        log(
+            "[+] WATCHER DISABLED"
+        );
+
+        updateUI();
+    }
+
+    // ============================================================
+    // Watcher toggle
+    // ============================================================
+
+    function onToggleClick(e) {
+        e.stopPropagation();
+
+        if (enabled) {
+            stopWatcher();
+        } else {
+            startWatcher();
+        }
+    }
+
+    toggle.addEventListener(
+        "click",
+        onToggleClick
+    );
+
+    // ============================================================
+    // Username textbox
+    // ============================================================
+
+    function onSpoofUserKeyDown(e) {
+        if (e.key !== "Enter") {
+            return;
+        }
+
+        e.preventDefault();
+
+        // Do not spoof while logged out.
+        if (!window.currentUser) {
+            log(
+                "[!] Cannot apply: NOT LOGGED IN"
+            );
+
+            return;
+        }
+
+        const target =
+            spoofUserInput.value.trim();
+
+        if (!target) {
+            log(
+                "[!] Cannot apply: EMPTY USERNAME"
+            );
+
+            return;
+        }
+
+        applySpoof(target);
+    }
+
+    spoofUserInput.addEventListener(
+        "keydown",
+        onSpoofUserKeyDown
+    );
+
+    // ============================================================
+    // Lightweight dragging
+    // ============================================================
+
+    function movePanel() {
+        raf = null;
+
+        if (!dragging) {
+            return;
+        }
+
+        panel.style.left =
+            `${pendingX - offsetX}px`;
+
+        panel.style.top =
+            `${pendingY - offsetY}px`;
+    }
+
+    function onPointerDown(e) {
+        // Do not drag when using controls.
+        if (
+            e.target === toggle ||
+            e.target === close ||
+            e.target === spoofUserInput ||
+            e.target.closest("button") ||
+            e.target.closest("input")
+        ) {
+            return;
+        }
+
+        dragging = true;
+
+        pointerId =
+            e.pointerId;
+
+        const rect =
+            panel.getBoundingClientRect();
+
+        offsetX =
+            e.clientX - rect.left;
+
+        offsetY =
+            e.clientY - rect.top;
+
+        panel.style.right = "auto";
+
+        head.setPointerCapture(
+            pointerId
+        );
+    }
+
+    function onPointerMove(e) {
+        if (
+            !dragging ||
+            e.pointerId !== pointerId
+        ) {
+            return;
+        }
+
+        pendingX =
+            e.clientX;
+
+        pendingY =
+            e.clientY;
+
+        if (raf === null) {
+            raf =
+                requestAnimationFrame(
+                    movePanel
+                );
+        }
+    }
+
+    function onPointerUp(e) {
+        if (
+            e.pointerId !== pointerId
+        ) {
+            return;
+        }
+
+        dragging = false;
+        pointerId = null;
+
+        if (raf !== null) {
+            cancelAnimationFrame(raf);
+            raf = null;
+        }
+    }
+
+    head.addEventListener(
+        "pointerdown",
+        onPointerDown
+    );
+
+    head.addEventListener(
+        "pointermove",
+        onPointerMove
+    );
+
+    head.addEventListener(
+        "pointerup",
+        onPointerUp
+    );
+
+    head.addEventListener(
+        "pointercancel",
+        onPointerUp
+    );
+
+    // ============================================================
+    // Close / destroy
+    // ============================================================
+
+    function destroy() {
+        enabled = false;
+
+        // Stop timer.
+        if (timer !== null) {
+            clearInterval(timer);
+            timer = null;
+        }
+
+        // Stop pending animation.
+        if (raf !== null) {
+            cancelAnimationFrame(raf);
+            raf = null;
+        }
+
+        // Remove event listeners.
+        toggle.removeEventListener(
+            "click",
+            onToggleClick
+        );
+
+        spoofUserInput.removeEventListener(
+            "keydown",
+            onSpoofUserKeyDown
+        );
+
+        head.removeEventListener(
+            "pointerdown",
+            onPointerDown
+        );
+
+        head.removeEventListener(
+            "pointermove",
+            onPointerMove
+        );
+
+        head.removeEventListener(
+            "pointerup",
+            onPointerUp
+        );
+
+        head.removeEventListener(
+            "pointercancel",
+            onPointerUp
+        );
+
+        // Remove UI.
+        panel.remove();
+        style.remove();
+
+        // Remove global controller.
+        delete window.__sugaAuth;
+
+        console.log(
+            "[SUGA//AUTH] Console terminated."
+        );
+    }
+
+    close.addEventListener(
+        "click",
+        e => {
+            e.stopPropagation();
+
+            console.log(
+                "[*] Terminating..."
+            );
+
+            destroy();
+        }
+    );
+
+    // ============================================================
+    // Global controller
+    // ============================================================
+
+    window.__sugaAuth = {
+        start: startWatcher,
+        stop: stopWatcher,
+        destroy,
+
+        spoof(username) {
+            return applySpoof(username);
+        },
+
+        status() {
+            return {
+                enabled,
+                loggedIn: Boolean(window.currentUser),
+                currentUser:
+                    window.currentUser || null,
+                spoofTarget:
+                    spoofUserInput.value.trim() || null
+            };
+        }
+    };
+
+    // ============================================================
+    // Initial state
+    // ============================================================
+
+    updateUI();
+
+    console.log(
+        "%c[SUGA'S SPOOFER] Console initialized.",
+        "color:#00ff66;font-weight:bold"
+    );
+
+})();
