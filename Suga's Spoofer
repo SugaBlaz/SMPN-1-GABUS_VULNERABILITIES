@@ -4,6 +4,8 @@
     // Client-side authorization testing / UI spoofing
     // ============================================================
 
+    const VERSION = "v1.3.0";
+
     // ------------------------------------------------------------
     // Kill previous instance
     // ------------------------------------------------------------
@@ -13,15 +15,15 @@
             window.__sugaAuth.destroy();
         } catch (e) {
             console.warn(
-                "[SUGA//AUTH] Failed to destroy previous instance:",
+                "[SUGA//AUTH] Previous instance cleanup failed:",
                 e
             );
         }
     }
 
-    // ------------------------------------------------------------
+    // ============================================================
     // State
-    // ------------------------------------------------------------
+    // ============================================================
 
     let enabled = false;
     let lastUser = window.currentUser || null;
@@ -37,6 +39,25 @@
     let pendingX = 0;
     let pendingY = 0;
 
+    const MENU_DEFINITIONS = [
+        {
+            id: "home",
+            label: "Home"
+        },
+        {
+            id: "presensi",
+            label: "Presensi"
+        },
+        {
+            id: "laporan",
+            label: "Laporan"
+        },
+        {
+            id: "catatan",
+            label: "Catatan"
+        }
+    ];
+
     // ============================================================
     // UI
     // ============================================================
@@ -50,6 +71,7 @@
 
             <div id="suga-controls">
                 <span id="suga-indicator">● OFF</span>
+
                 <button
                     id="suga-close"
                     type="button"
@@ -72,12 +94,36 @@
                 >
             </div>
 
+            <div class="suga-row suga-menu-row">
+                <span>SHOW MENUS</span>
+
+                <div
+                    id="suga-menu-wrapper"
+                    class="suga-menu-wrapper"
+                >
+                    <button
+                        id="suga-menu-button"
+                        type="button"
+                    >
+                        NONE ▾
+                    </button>
+
+                    <div
+                        id="suga-menu-dropdown"
+                        class="suga-menu-dropdown"
+                    ></div>
+                </div>
+            </div>
+
             <div class="suga-row">
                 <span>WATCHER</span>
+
                 <button
                     id="suga-toggle"
                     type="button"
-                >OFF</button>
+                >
+                    OFF
+                </button>
             </div>
 
             <div class="suga-row">
@@ -90,11 +136,20 @@
                 <span id="suga-state">STANDBY</span>
             </div>
 
+            <div class="suga-log-title">
+                AUTH CONSOLE
+            </div>
+
             <div id="suga-log">
                 <div>&gt; [SUGA'S SPOOFER] AUTH CONSOLE READY</div>
                 <div>&gt; [+] WATCHER DISABLED</div>
             </div>
 
+        </div>
+
+        <div id="suga-footer">
+            <span>SUGA'S SPOOFER</span>
+            <span>${VERSION}</span>
         </div>
     `;
 
@@ -105,13 +160,24 @@
     const style = document.createElement("style");
 
     style.textContent = `
+        /* ========================================================
+           Main frame
+           ======================================================== */
+
         #suga-auth-panel {
             position: fixed;
 
             top: 20px;
             right: 20px;
 
-            width: 285px;
+            width: 300px;
+
+            max-height: calc(100vh - 40px);
+
+            display: flex;
+            flex-direction: column;
+
+            overflow: hidden;
 
             z-index: 2147483647;
 
@@ -135,8 +201,13 @@
             contain: layout paint;
         }
 
+        /* ========================================================
+           Header
+           ======================================================== */
+
         #suga-head {
             height: 32px;
+            min-height: 32px;
 
             display: flex;
             align-items: center;
@@ -154,6 +225,8 @@
             letter-spacing: 1px;
 
             touch-action: none;
+
+            flex-shrink: 0;
         }
 
         #suga-head:active {
@@ -163,13 +236,17 @@
         #suga-controls {
             display: flex;
             align-items: center;
-
             gap: 8px;
         }
 
         #suga-indicator {
             font-size: 10px;
+            white-space: nowrap;
         }
+
+        /* ========================================================
+           Close button
+           ======================================================== */
 
         #suga-close {
             width: 22px;
@@ -194,9 +271,61 @@
             color: #000;
         }
 
+        /* ========================================================
+           Main scroll area
+           ======================================================== */
+
         #suga-content {
+            min-height: 0;
+
             padding: 10px;
+
+            overflow-y: auto;
+            overflow-x: hidden;
+
+            /*
+             * Clean scrollbar.
+             * Firefox
+             */
+            scrollbar-width: thin;
+            scrollbar-color:
+                #164d28
+                transparent;
+
+            flex: 1 1 auto;
         }
+
+        /*
+         * Chrome / Edge / Safari
+         */
+
+        #suga-content::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #suga-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #suga-content::-webkit-scrollbar-thumb {
+            background: #164d28;
+
+            border-radius: 10px;
+
+            opacity: .6;
+        }
+
+        #suga-content::-webkit-scrollbar-thumb:hover {
+            background: #00b84d;
+        }
+
+        #suga-content::-webkit-scrollbar-button {
+            display: none;
+        }
+
+        /* ========================================================
+           Rows
+           ======================================================== */
 
         .suga-row {
             display: flex;
@@ -212,12 +341,16 @@
             border-bottom: 1px dashed #164d28;
         }
 
-        /* --------------------------------------------------------
-           Spoof username textbox
-           -------------------------------------------------------- */
+        .suga-menu-row {
+            align-items: flex-start;
+        }
+
+        /* ========================================================
+           Username input
+           ======================================================== */
 
         #suga-spoof-user {
-            width: 125px;
+            width: 130px;
 
             box-sizing: border-box;
 
@@ -248,9 +381,131 @@
                 0 0 5px rgba(0, 255, 100, .25);
         }
 
-        /* --------------------------------------------------------
-           Watcher button
-           -------------------------------------------------------- */
+        /* ========================================================
+           Menu dropdown
+           ======================================================== */
+
+        .suga-menu-wrapper {
+            position: relative;
+
+            width: 145px;
+
+            flex-shrink: 0;
+        }
+
+        #suga-menu-button {
+            width: 100%;
+
+            padding: 4px 7px;
+
+            background: #020402;
+            color: #00ff66;
+
+            border: 1px solid #164d28;
+
+            font-family: inherit;
+            font-size: 11px;
+
+            text-align: left;
+
+            cursor: pointer;
+        }
+
+        #suga-menu-button:hover {
+            border-color: #00ff66;
+        }
+
+        #suga-menu-dropdown {
+            position: absolute;
+
+            top: calc(100% + 3px);
+            left: 0;
+            right: 0;
+
+            display: none;
+
+            padding: 5px;
+
+            background: #050805;
+
+            border: 1px solid #00ff66;
+
+            box-shadow:
+                0 0 8px rgba(0, 255, 100, .25);
+
+            z-index: 999999;
+
+            max-height: 170px;
+
+            overflow-y: auto;
+            overflow-x: hidden;
+
+            scrollbar-width: thin;
+            scrollbar-color:
+                #164d28
+                transparent;
+        }
+
+        #suga-menu-dropdown::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #suga-menu-dropdown::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #suga-menu-dropdown::-webkit-scrollbar-thumb {
+            background: #164d28;
+            border-radius: 10px;
+        }
+
+        #suga-menu-dropdown::-webkit-scrollbar-thumb:hover {
+            background: #00b84d;
+        }
+
+        #suga-menu-dropdown::-webkit-scrollbar-button {
+            display: none;
+        }
+
+        #suga-menu-dropdown.suga-open {
+            display: block;
+        }
+
+        .suga-menu-item {
+            display: flex;
+
+            align-items: center;
+
+            gap: 7px;
+
+            padding: 5px 4px;
+
+            color: #00ff66;
+
+            cursor: pointer;
+        }
+
+        .suga-menu-item:hover {
+            background: #0a180d;
+        }
+
+        .suga-menu-item input {
+            margin: 0;
+
+            accent-color: #00ff66;
+
+            cursor: pointer;
+        }
+
+        .suga-menu-item span {
+            flex: 1;
+
+            cursor: pointer;
+        }
+
+        /* ========================================================
+           Watcher
+           ======================================================== */
 
         #suga-toggle {
             min-width: 48px;
@@ -273,16 +528,38 @@
             filter: brightness(1.3);
         }
 
-        /* --------------------------------------------------------
-           Log
-           -------------------------------------------------------- */
+        /* ========================================================
+           Logger title
+           ======================================================== */
+
+        .suga-log-title {
+            margin-top: 10px;
+            margin-bottom: 4px;
+
+            color: #00ff66;
+
+            font-size: 10px;
+            font-weight: bold;
+
+            letter-spacing: 1px;
+        }
+
+        /* ========================================================
+           Logger console
+           ======================================================== */
 
         #suga-log {
-            height: 70px;
+            height: 120px;
+            min-height: 120px;
 
-            overflow: hidden;
+            max-height: 120px;
+
+            overflow-y: auto;
+            overflow-x: hidden;
 
             padding: 7px;
+
+            box-sizing: border-box;
 
             background: #020402;
 
@@ -292,16 +569,101 @@
 
             font-size: 10px;
             line-height: 14px;
+
+            user-select: text;
+
+            scrollbar-width: thin;
+            scrollbar-color:
+                #164d28
+                transparent;
         }
+
+        #suga-log::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #suga-log::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #suga-log::-webkit-scrollbar-thumb {
+            background: #164d28;
+
+            border-radius: 10px;
+        }
+
+        #suga-log::-webkit-scrollbar-thumb:hover {
+            background: #00b84d;
+        }
+
+        #suga-log::-webkit-scrollbar-button {
+            display: none;
+        }
+
+        /* ========================================================
+           Footer
+           ======================================================== */
+
+        #suga-footer {
+            height: 24px;
+            min-height: 24px;
+
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            padding: 0 9px;
+
+            box-sizing: border-box;
+
+            background: #030603;
+
+            border-top: 1px solid #164d28;
+
+            color: #276b3e;
+
+            font-size: 9px;
+
+            letter-spacing: .6px;
+
+            flex-shrink: 0;
+        }
+
+        #suga-footer span:last-child {
+            color: #00b84d;
+        }
+
+        /* ========================================================
+           Status
+           ======================================================== */
 
         .suga-online {
             color: #00ff66 !important;
+
             text-shadow:
                 0 0 5px #00ff66;
         }
 
         .suga-offline {
             color: #ff4444 !important;
+        }
+
+        /* ========================================================
+           Mobile
+           ======================================================== */
+
+        @media (max-width: 500px) {
+            #suga-auth-panel {
+                left: 10px;
+                right: 10px;
+
+                width: auto;
+
+                top: 10px;
+
+                max-height:
+                    calc(100vh - 20px);
+            }
         }
     `;
 
@@ -336,6 +698,12 @@
     const spoofUserInput =
         panel.querySelector("#suga-spoof-user");
 
+    const menuButton =
+        panel.querySelector("#suga-menu-button");
+
+    const menuDropdown =
+        panel.querySelector("#suga-menu-dropdown");
+
     // ============================================================
     // Logging
     // ============================================================
@@ -349,97 +717,167 @@
 
         logBox.prepend(line);
 
-        while (logBox.children.length > 5) {
+        while (logBox.children.length > 100) {
             logBox.lastElementChild.remove();
         }
+
+        // Keep newest event at the top.
+        logBox.scrollTop = 0;
     }
 
     // ============================================================
-    // Update UI
+    // Menu selector
     // ============================================================
 
-    function updateUI() {
-        const current =
-            window.currentUser || null;
+    function buildMenuSelector() {
+        menuDropdown.innerHTML = "";
 
-        // Display current client-side identity
-        userLabel.textContent =
-            current || "---";
+        MENU_DEFINITIONS.forEach(menu => {
+            const label =
+                document.createElement("label");
 
-        // IMPORTANT:
-        // The textbox is ALWAYS editable.
-        // You can configure the target username before logging in.
-        spoofUserInput.disabled = false;
+            label.className =
+                "suga-menu-item";
 
-        if (enabled) {
-            indicator.textContent = "● ON";
-            indicator.className =
-                "suga-online";
+            const checkbox =
+                document.createElement("input");
 
-            toggle.textContent = "ON";
-            toggle.className =
-                "suga-online";
+            checkbox.type = "checkbox";
+            checkbox.value = menu.id;
+            checkbox.dataset.menuId =
+                menu.id;
 
-            stateLabel.textContent =
-                "MONITORING";
-        } else {
-            indicator.textContent = "● OFF";
-            indicator.className =
-                "suga-offline";
+            const text =
+                document.createElement("span");
 
-            toggle.textContent = "OFF";
-            toggle.className =
-                "suga-offline";
+            text.textContent =
+                menu.label;
 
-            stateLabel.textContent =
-                "STANDBY";
+            label.appendChild(checkbox);
+            label.appendChild(text);
+
+            menuDropdown.appendChild(label);
+        });
+
+        updateMenuButton();
+    }
+
+    function getSelectedMenus() {
+        return [
+            ...menuDropdown.querySelectorAll(
+                'input[type="checkbox"]:checked'
+            )
+        ].map(
+            checkbox =>
+                checkbox.dataset.menuId
+        );
+    }
+
+    function setSelectedMenus(menus) {
+        const selected =
+            new Set(
+                Array.isArray(menus)
+                    ? menus
+                    : []
+            );
+
+        menuDropdown
+            .querySelectorAll(
+                'input[type="checkbox"]'
+            )
+            .forEach(checkbox => {
+                checkbox.checked =
+                    selected.has(
+                        checkbox.dataset.menuId
+                    );
+            });
+
+        updateMenuButton();
+    }
+
+    function updateMenuButton() {
+        const selected =
+            getSelectedMenus();
+
+        if (selected.length === 0) {
+            menuButton.textContent =
+                "NONE ▾";
+
+            return;
         }
+
+        if (
+            selected.length ===
+            MENU_DEFINITIONS.length
+        ) {
+            menuButton.textContent =
+                "ALL MENUS ▾";
+
+            return;
+        }
+
+        const names =
+            MENU_DEFINITIONS
+                .filter(menu =>
+                    selected.includes(
+                        menu.id
+                    )
+                )
+                .map(menu =>
+                    menu.label
+                );
+
+        let text =
+            names.join(", ");
+
+        if (text.length > 20) {
+            text =
+                `${selected.length} SELECTED`;
+        }
+
+        menuButton.textContent =
+            `${text} ▾`;
     }
 
     // ============================================================
-    // Refresh navigation menus
+    // Refresh navigation
     // ============================================================
 
     function refreshMenus() {
-        const menus = [
-            "home",
-            "presensi",
-            "laporan",
-            "catatan"
-        ];
-
-        // Hide all known menus first.
-        menus.forEach(menu => {
+        MENU_DEFINITIONS.forEach(menu => {
             const element =
                 document.getElementById(
-                    "nav-" + menu
+                    "nav-" + menu.id
                 );
 
             if (element) {
-                element.style.display = "none";
+                element.style.display =
+                    "none";
             }
         });
 
-        // Then show the configured allowed menus.
         const allowed =
-            Array.isArray(window.allowedMenus)
+            Array.isArray(
+                window.allowedMenus
+            )
                 ? window.allowedMenus
                 : [];
 
-        allowed.forEach(menu => {
+        allowed.forEach(menuId => {
             const element =
                 document.getElementById(
-                    "nav-" + menu
+                    "nav-" + menuId
                 );
 
             if (element) {
-                element.style.display = "flex";
+                element.style.display =
+                    "flex";
             }
         });
     }
 
     // ============================================================
-    // Refresh visible username text
+    // Refresh displayed username
     // ============================================================
 
     function refreshDisplayedUsername(
@@ -455,10 +893,10 @@
                 .trim()
                 .toLowerCase();
 
-        document.querySelectorAll("*").forEach(
-            element => {
+        document
+            .querySelectorAll("*")
+            .forEach(element => {
 
-                // Never modify our own panel.
                 if (element === panel) {
                     return;
                 }
@@ -467,8 +905,9 @@
                     return;
                 }
 
-                // Only modify leaf elements.
-                if (element.children.length !== 0) {
+                if (
+                    element.children.length !== 0
+                ) {
                     return;
                 }
 
@@ -481,58 +920,75 @@
                     element.textContent =
                         newUsername;
                 }
-            }
-        );
+            });
     }
 
     // ============================================================
-    // Apply username spoof
+    // Apply spoof
     // ============================================================
 
-    function applySpoof(targetUsername) {
-        // Must already have a client-side login.
+    function applySpoof(
+        targetUsername,
+        selectedMenus
+    ) {
         if (!window.currentUser) {
             log(
-                "[!] SPOOF BLOCKED: NOT LOGGED IN"
+                "[!] APPLY BLOCKED: NOT LOGGED IN"
             );
 
             return false;
         }
 
         const target =
-            String(targetUsername || "").trim();
+            String(
+                targetUsername ?? ""
+            ).trim();
+
+        const menus =
+            Array.isArray(selectedMenus)
+                ? selectedMenus
+                : getSelectedMenus();
 
         if (!target) {
             log(
-                "[!] SPOOF BLOCKED: EMPTY USERNAME"
+                "[!] APPLY BLOCKED: EMPTY USERNAME"
             );
 
             return false;
         }
 
+        const validMenuIds =
+            new Set(
+                MENU_DEFINITIONS.map(
+                    menu => menu.id
+                )
+            );
+
+        const cleanMenus =
+            menus.filter(
+                menu =>
+                    validMenuIds.has(menu)
+            );
+
         const original =
             window.currentUser;
 
         // --------------------------------------------------------
-        // Client-side identity replacement
+        // Client-side username
         // --------------------------------------------------------
 
         window.currentUser =
             target;
 
         // --------------------------------------------------------
-        // Client-side menu replacement
+        // Client-side menus
         // --------------------------------------------------------
 
-        window.allowedMenus = [
-            "home",
-            "presensi",
-            "laporan",
-            "catatan"
-        ];
+        window.allowedMenus =
+            cleanMenus;
 
         // --------------------------------------------------------
-        // Refresh page UI
+        // Refresh UI
         // --------------------------------------------------------
 
         refreshMenus();
@@ -543,7 +999,7 @@
         );
 
         // --------------------------------------------------------
-        // Logging
+        // Log
         // --------------------------------------------------------
 
         console.log(
@@ -558,11 +1014,19 @@
 
         console.log(
             "[SUGA//AUTH] Menus:",
-            window.allowedMenus
+            cleanMenus
         );
 
         log(
-            `[+] SPOOFED! ${original} → ${target}`
+            `[+] USER: ${original} → ${target}`
+        );
+
+        log(
+            `[+] MENUS: ${
+                cleanMenus.length
+                    ? cleanMenus.join(", ")
+                    : "NONE"
+            }`
         );
 
         updateUI();
@@ -575,39 +1039,53 @@
     // ============================================================
 
     function handleLogin(user) {
-        console.log(
-            "[*] Login detected:",
-            user
-        );
-
         const loggedInAs =
             String(user || "").trim();
+
+        console.log(
+            "[*] Login detected:",
+            loggedInAs
+        );
 
         log(
             `[*] LOGIN: ${loggedInAs}`
         );
 
-        // Read target username from textbox.
         const target =
             spoofUserInput.value.trim();
 
-        // Nothing configured.
+        const menus =
+            getSelectedMenus();
+
         if (!target) {
             log(
                 "[!] No spoof username configured"
             );
+
+            if (menus.length > 0) {
+                window.allowedMenus =
+                    menus;
+
+                refreshMenus();
+
+                log(
+                    `[+] MENUS APPLIED: ${menus.join(", ")}`
+                );
+            }
 
             updateUI();
 
             return;
         }
 
-        // Apply configured spoof.
-        applySpoof(target);
+        applySpoof(
+            target,
+            menus
+        );
     }
 
     // ============================================================
-    // Watcher check
+    // Watcher
     // ============================================================
 
     function check() {
@@ -618,7 +1096,6 @@
         const current =
             window.currentUser || null;
 
-        // Nothing changed.
         if (current === lastUser) {
             return;
         }
@@ -649,7 +1126,6 @@
         if (!lastUser && current) {
             handleLogin(current);
 
-            // handleLogin() may have modified currentUser.
             lastUser =
                 window.currentUser || null;
 
@@ -659,7 +1135,7 @@
         }
 
         // --------------------------------------------------------
-        // Any other identity change
+        // Other identity change
         // --------------------------------------------------------
 
         lastUser =
@@ -684,9 +1160,11 @@
         );
 
         timer =
-            setInterval(check, 500);
+            setInterval(
+                check,
+                500
+            );
 
-        // Immediately check current state.
         check();
 
         updateUI();
@@ -712,7 +1190,56 @@
     }
 
     // ============================================================
-    // Watcher toggle
+    // UI update
+    // ============================================================
+
+    function updateUI() {
+        const current =
+            window.currentUser || null;
+
+        userLabel.textContent =
+            current || "---";
+
+        // Always editable.
+        spoofUserInput.disabled = false;
+
+        updateMenuButton();
+
+        if (enabled) {
+            indicator.textContent =
+                "● ON";
+
+            indicator.className =
+                "suga-online";
+
+            toggle.textContent =
+                "ON";
+
+            toggle.className =
+                "suga-online";
+
+            stateLabel.textContent =
+                "MONITORING";
+        } else {
+            indicator.textContent =
+                "● OFF";
+
+            indicator.className =
+                "suga-offline";
+
+            toggle.textContent =
+                "OFF";
+
+            toggle.className =
+                "suga-offline";
+
+            stateLabel.textContent =
+                "STANDBY";
+        }
+    }
+
+    // ============================================================
+    // Watcher button
     // ============================================================
 
     function onToggleClick(e) {
@@ -731,7 +1258,7 @@
     );
 
     // ============================================================
-    // Username textbox
+    // Username input
     // ============================================================
 
     function onSpoofUserKeyDown(e) {
@@ -741,7 +1268,6 @@
 
         e.preventDefault();
 
-        // Do not spoof while logged out.
         if (!window.currentUser) {
             log(
                 "[!] Cannot apply: NOT LOGGED IN"
@@ -750,18 +1276,10 @@
             return;
         }
 
-        const target =
-            spoofUserInput.value.trim();
-
-        if (!target) {
-            log(
-                "[!] Cannot apply: EMPTY USERNAME"
-            );
-
-            return;
-        }
-
-        applySpoof(target);
+        applySpoof(
+            spoofUserInput.value,
+            getSelectedMenus()
+        );
     }
 
     spoofUserInput.addEventListener(
@@ -770,7 +1288,82 @@
     );
 
     // ============================================================
-    // Lightweight dragging
+    // Menu dropdown
+    // ============================================================
+
+    function onMenuButtonClick(e) {
+        e.stopPropagation();
+
+        menuDropdown.classList.toggle(
+            "suga-open"
+        );
+    }
+
+    menuButton.addEventListener(
+        "click",
+        onMenuButtonClick
+    );
+
+    function onMenuChange(e) {
+        if (
+            !e.target.matches(
+                'input[type="checkbox"]'
+            )
+        ) {
+            return;
+        }
+
+        updateMenuButton();
+
+        const selected =
+            getSelectedMenus();
+
+        // Apply immediately when already logged in.
+        if (window.currentUser) {
+            window.allowedMenus =
+                selected;
+
+            refreshMenus();
+
+            log(
+                `[+] MENUS UPDATED: ${
+                    selected.length
+                        ? selected.join(", ")
+                        : "NONE"
+                }`
+            );
+
+            updateUI();
+        }
+    }
+
+    menuDropdown.addEventListener(
+        "change",
+        onMenuChange
+    );
+
+    // ============================================================
+    // Outside click
+    // ============================================================
+
+    function onDocumentClick(e) {
+        if (
+            !menuDropdown.contains(e.target) &&
+            e.target !== menuButton
+        ) {
+            menuDropdown.classList.remove(
+                "suga-open"
+            );
+        }
+    }
+
+    document.addEventListener(
+        "click",
+        onDocumentClick
+    );
+
+    // ============================================================
+    // Dragging
     // ============================================================
 
     function movePanel() {
@@ -788,13 +1381,16 @@
     }
 
     function onPointerDown(e) {
-        // Do not drag when using controls.
         if (
             e.target === toggle ||
             e.target === close ||
             e.target === spoofUserInput ||
+            e.target === menuButton ||
             e.target.closest("button") ||
-            e.target.closest("input")
+            e.target.closest("input") ||
+            e.target.closest(
+                ".suga-menu-wrapper"
+            )
         ) {
             return;
         }
@@ -813,7 +1409,8 @@
         offsetY =
             e.clientY - rect.top;
 
-        panel.style.right = "auto";
+        panel.style.right =
+            "auto";
 
         head.setPointerCapture(
             pointerId
@@ -879,25 +1476,22 @@
     );
 
     // ============================================================
-    // Close / destroy
+    // Destroy
     // ============================================================
 
     function destroy() {
         enabled = false;
 
-        // Stop timer.
         if (timer !== null) {
             clearInterval(timer);
             timer = null;
         }
 
-        // Stop pending animation.
         if (raf !== null) {
             cancelAnimationFrame(raf);
             raf = null;
         }
 
-        // Remove event listeners.
         toggle.removeEventListener(
             "click",
             onToggleClick
@@ -906,6 +1500,21 @@
         spoofUserInput.removeEventListener(
             "keydown",
             onSpoofUserKeyDown
+        );
+
+        menuButton.removeEventListener(
+            "click",
+            onMenuButtonClick
+        );
+
+        menuDropdown.removeEventListener(
+            "change",
+            onMenuChange
+        );
+
+        document.removeEventListener(
+            "click",
+            onDocumentClick
         );
 
         head.removeEventListener(
@@ -928,17 +1537,19 @@
             onPointerUp
         );
 
-        // Remove UI.
         panel.remove();
         style.remove();
 
-        // Remove global controller.
         delete window.__sugaAuth;
 
         console.log(
             "[SUGA//AUTH] Console terminated."
         );
     }
+
+    // ============================================================
+    // Close
+    // ============================================================
 
     close.addEventListener(
         "click",
@@ -959,33 +1570,91 @@
 
     window.__sugaAuth = {
         start: startWatcher,
+
         stop: stopWatcher,
+
         destroy,
 
         spoof(username) {
-            return applySpoof(username);
+            return applySpoof(
+                username,
+                getSelectedMenus()
+            );
+        },
+
+        setMenus(menus) {
+            if (!Array.isArray(menus)) {
+                console.warn(
+                    "[SUGA//AUTH] setMenus expects an array."
+                );
+
+                return false;
+            }
+
+            setSelectedMenus(menus);
+
+            if (window.currentUser) {
+                window.allowedMenus =
+                    getSelectedMenus();
+
+                refreshMenus();
+
+                log(
+                    `[+] MENUS UPDATED: ${
+                        window.allowedMenus.length
+                            ? window.allowedMenus.join(", ")
+                            : "NONE"
+                    }`
+                );
+
+                updateUI();
+            }
+
+            return true;
         },
 
         status() {
             return {
+                version: VERSION,
+
                 enabled,
-                loggedIn: Boolean(window.currentUser),
+
+                loggedIn:
+                    Boolean(
+                        window.currentUser
+                    ),
+
                 currentUser:
                     window.currentUser || null,
+
                 spoofTarget:
-                    spoofUserInput.value.trim() || null
+                    spoofUserInput.value.trim() ||
+                    null,
+
+                selectedMenus:
+                    getSelectedMenus(),
+
+                allowedMenus:
+                    Array.isArray(
+                        window.allowedMenus
+                    )
+                        ? [
+                            ...window.allowedMenus
+                        ]
+                        : []
             };
         }
     };
 
     // ============================================================
-    // Initial state
+    // Initialize
     // ============================================================
 
+    buildMenuSelector();
     updateUI();
 
     console.log(
-        "%c[SUGA'S SPOOFER] Console initialized.",
+        `%c[SUGA'S SPOOFER] ${VERSION} initialized.`,
         "color:#00ff66;font-weight:bold"
     );
 
