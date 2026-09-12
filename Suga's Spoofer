@@ -4,7 +4,7 @@
     // Client-side authorization spoofing and UI spoofing
     // ============================================================
 
-    const VERSION = "v1.4.3";
+    const VERSION = "v1.4.4";
 
     // ------------------------------------------------------------
     // Kill previous instance
@@ -1146,7 +1146,7 @@
             new Event("input", { bubbles: true })
         );
     
-        log("[*] TEST LOGIN: publik");
+        log('[*] LOGGING IN AS "publik"');
     
         if (typeof window.prosesLogin === "function") {
             window.prosesLogin();
