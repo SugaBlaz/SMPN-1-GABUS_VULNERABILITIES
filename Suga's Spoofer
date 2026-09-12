@@ -1,10 +1,10 @@
 (() => {
     // ============================================================
     // SUGA'S SPOOFER
-    // Client-side authorization testing / UI spoofing
+    // Client-side authorization spoofing and UI spoofing
     // ============================================================
 
-    const VERSION = "v1.3.0";
+    const VERSION = "v1.4.2";
 
     // ------------------------------------------------------------
     // Kill previous instance
@@ -92,6 +92,17 @@
                     autocomplete="off"
                     spellcheck="false"
                 >
+            </div>
+
+            <div class="suga-row">
+                <span>AUTO LOGIN</span>
+            
+                <button
+                    id="suga-login-button"
+                    type="button"
+                >
+                    LOGIN AS PUBLIK
+                </button>
             </div>
 
             <div class="suga-row suga-menu-row">
@@ -379,6 +390,29 @@
 
             box-shadow:
                 0 0 5px rgba(0, 255, 100, .25);
+        }
+
+        /* ========================================================
+           Login Button
+           ======================================================== */
+
+        #suga-login-button {
+            padding: 5px 8px;
+            background: #050805;
+            border: 1px solid #00ff66;
+            color: #00ff66;
+            font-family: inherit;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        #suga-login-button:hover {
+            filter: brightness(1.3);
+        }
+        
+        #suga-login-button:active {
+            transform: scale(0.96);
         }
 
         /* ========================================================
@@ -679,6 +713,9 @@
 
     const toggle =
         panel.querySelector("#suga-toggle");
+
+    const loginButton =
+        panel.querySelector("#suga-login-button");
 
     const close =
         panel.querySelector("#suga-close");
@@ -1035,7 +1072,7 @@
     }
 
     // ============================================================
-    // Login handler
+    // Login handlers
     // ============================================================
 
     function handleLogin(user) {
@@ -1082,6 +1119,40 @@
             target,
             menus
         );
+    }
+
+    function AutoLogin(e) {
+        e.stopPropagation();
+    
+        const usernameInput =
+            document.getElementById("uName");
+    
+        const passwordInput =
+            document.getElementById("uPass");
+    
+        if (!usernameInput || !passwordInput) {
+            log("[!] Login fields not found");
+            return;
+        }
+    
+        usernameInput.value = "publik";
+        passwordInput.value = "publik123";
+    
+        usernameInput.dispatchEvent(
+            new Event("input", { bubbles: true })
+        );
+    
+        passwordInput.dispatchEvent(
+            new Event("input", { bubbles: true })
+        );
+    
+        log("[*] TEST LOGIN: publik");
+    
+        if (typeof window.prosesLogin === "function") {
+            window.prosesLogin();
+        } else {
+            log("[!] prosesLogin() not available");
+        }
     }
 
     // ============================================================
@@ -1285,6 +1356,15 @@
     spoofUserInput.addEventListener(
         "keydown",
         onSpoofUserKeyDown
+    );
+
+    // --------------------------------------------------------
+    // Login
+    // --------------------------------------------------------
+
+    loginButton.addEventListener(
+        "click",
+        AutoLogin
     );
 
     // ============================================================
@@ -1535,6 +1615,11 @@
         head.removeEventListener(
             "pointercancel",
             onPointerUp
+        );
+
+        loginButton.removeEventListener(
+            "click",
+            loginAsPublik
         );
 
         panel.remove();
