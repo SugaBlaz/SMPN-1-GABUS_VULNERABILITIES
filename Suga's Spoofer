@@ -4,7 +4,7 @@
     // Client-side authorization spoofing and UI spoofing
     // ============================================================
 
-    const VERSION = "v1.4.2";
+    const VERSION = "v1.4.3";
 
     // ------------------------------------------------------------
     // Kill previous instance
@@ -101,7 +101,7 @@
                     id="suga-login-button"
                     type="button"
                 >
-                    LOGIN AS PUBLIK
+                    LOGIN AS "PUBLIK"
                 </button>
             </div>
 
@@ -1121,7 +1121,7 @@
         );
     }
 
-    function AutoLogin(e) {
+    function autoLogin(e) {
         e.stopPropagation();
     
         const usernameInput =
@@ -1364,7 +1364,7 @@
 
     loginButton.addEventListener(
         "click",
-        AutoLogin
+        autoLogin
     );
 
     // ============================================================
@@ -1619,7 +1619,7 @@
 
         loginButton.removeEventListener(
             "click",
-            loginAsPublik
+            autoLogin
         );
 
         panel.remove();
@@ -1742,5 +1742,4 @@
         `%c[SUGA'S SPOOFER] ${VERSION} initialized.`,
         "color:#00ff66;font-weight:bold"
     );
-
 })();
