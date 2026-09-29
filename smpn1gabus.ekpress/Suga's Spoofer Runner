@@ -1,4 +1,4 @@
-fetch("https://raw.githubusercontent.com/SugaBlaz/SMPN-1-GABUS_VULNERABILITIES/refs/heads/main/Suga's%20Spoofer")
+fetch("https://raw.githubusercontent.com/SugaBlaz/SMPN-1-GABUS_VULNERABILITIES/refs/heads/main/smpn1gabus.ekpress/Suga's%20Spoofer")
   .then(response => {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
