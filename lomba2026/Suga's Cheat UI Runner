@@ -1,4 +1,4 @@
-fetch("https://raw.githubusercontent.com/SugaBlaz/SMPN-1-GABUS_VULNERABILITIES/refs/heads/main/lomba2026/Suga's%20Cheat%20UI")
+fetch("https://raw.githubusercontent.com/SugaBlaz/SMPN-1-GABUS_VULNERABILITIES/refs/heads/main/lomba2026/Suga's%20Cheat%20UI.js")
   .then(response => {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
