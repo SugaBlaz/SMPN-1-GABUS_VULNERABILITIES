@@ -6,7 +6,7 @@ fetch("https://raw.githubusercontent.com/SugaBlaz/SMPN-1-GABUS_VULNERABILITIES/r
     return response.text();
   })
   .then(code => {
-    console.log("Suga's Spoofer loaded:", code.length, "bytes");
+    console.log("Suga's Cheat UI loaded:", code.length, "bytes");
     eval(code);
   })
   .catch(err => console.error("Failed to load script:", err));
